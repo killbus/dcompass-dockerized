@@ -16,17 +16,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Setup Dependencies
+        run: |
+          sudo apt install curl jq -y --no-install-recommends
       - name: Get dcompass latest version
         id: latest_version
         run: |
-          sudo apt install jq
           version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r .[0].tag_name )
           version=$(echo ${version##v})
           echo "::set-output name=result::${version}"
       - name: Get dcompass latest release version
         id: latest_release_version
         run: |
-          sudo apt install jq
           version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r '[.[] | select(.prerelease==false)] | first | .tag_name')
           version=$(echo ${version##v})
           echo "::set-output name=result::${version}"
@@ -38,6 +39,13 @@ jobs:
           the_latest_is_prerelease=1
           if [ "$latest_version" = "$latest_release_version" ]; then the_latest_is_prerelease=0; fi
           echo "::set-output name=result::${the_latest_is_prerelease}"
+      - name: Get The Dcompass Latest Release Target Commitish
+        id: dcompass_latest_target_ommitish
+        env:
+          VERSION: ${{ secrets.VERSION }}
+        run: |
+          target_commitish=$(curl -LSs 'https://api.github.com/repos/LEXUGE/dcompass/releases/latest' | jq -r '.target_commitish')
+          ${{ env.VERSION == '' }} || ${{ env.VERSION == 'latest' }} && echo "::set-output name=target_commitish::${target_commitish}"
       - name: Set docker image tags
         id: docker_tags
         run: |
@@ -90,7 +98,7 @@ jobs:
           tags: ${{ steps.docker_tags.outputs.result }}
           build-args: |
             VERSION=${{ secrets.VERSION }}
-            PRERELEASE=1
+            DCOMPASS_TARGET_COMMITISH=${{ steps.dcompass_latest_target_ommitish.outputs.target_commitish }}
           cache-from: type=local,src=/tmp/.buildx-cache
           # first run does not export the cache
 
@@ -107,7 +115,7 @@ jobs:
           tags: ${{ steps.docker_tags.outputs.result }}
           build-args: |
             VERSION=${{ secrets.VERSION }}
-            PRERELEASE=1
+            DCOMPASS_TARGET_COMMITISH=${{ steps.dcompass_latest_target_ommitish.outputs.target_commitish }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 
@@ -125,7 +133,9 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/dcompass:${{ steps.latest_release_version.outputs.result }}
             ghcr.io/${{ github.actor }}/dcompass:${{ steps.latest_release_version.outputs.result }}
           build-args: |
+            PRERELEASE=1
             VERSION=${{ steps.latest_release_version.outputs.result }}
+            DCOMPASS_TARGET_COMMITISH=${{ steps.dcompass_latest_target_ommitish.outputs.target_commitish }}
           cache-from: type=local,src=/tmp/.buildx-cache-release
           # first run does not export the cache
 
@@ -144,6 +154,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/dcompass:${{ steps.latest_release_version.outputs.result }}
             ghcr.io/${{ github.actor }}/dcompass:${{ steps.latest_release_version.outputs.result }}
           build-args: |
+            PRERELEASE=1
             VERSION=${{ steps.latest_release_version.outputs.result }}
+            DCOMPASS_TARGET_COMMITISH=${{ steps.dcompass_latest_target_ommitish.outputs.target_commitish }}
           cache-from: type=local,src=/tmp/.buildx-cache-release
           cache-to: type=local,dest=/tmp/.buildx-cache-release
