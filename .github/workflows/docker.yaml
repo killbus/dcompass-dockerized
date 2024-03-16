@@ -24,13 +24,13 @@ jobs:
         run: |
           version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r .[0].tag_name )
           version=$(echo ${version##v})
-          echo "::set-output name=result::${version}"
+          echo "result=${version}" >> $GITHUB_OUTPUT
       - name: Get dcompass latest release version
         id: latest_release_version
         run: |
           version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r '[.[] | select(.prerelease==false)] | first | .tag_name')
           version=$(echo ${version##v})
-          echo "::set-output name=result::${version}"
+          echo "result=${version}" >> $GITHUB_OUTPUT
       - name: Check whether the latest version is prerelease
         id: the_latest_is_prerelease
         run: |
@@ -38,14 +38,14 @@ jobs:
           latest_release_version=${{ steps.latest_release_version.outputs.result }}
           the_latest_is_prerelease=1
           if [ "$latest_version" = "$latest_release_version" ]; then the_latest_is_prerelease=0; fi
-          echo "::set-output name=result::${the_latest_is_prerelease}"
+          echo "the_latest_is_prerelease=$the_latest_is_prerelease" >> $GITHUB_OUTPUT
       - name: Get The Dcompass Latest Release Target Commitish
         id: dcompass_latest_target_ommitish
         env:
           VERSION: ${{ secrets.VERSION }}
         run: |
           target_commitish=$(curl -LSs 'https://api.github.com/repos/LEXUGE/dcompass/releases/latest' | jq -r '.target_commitish')
-          ${{ env.VERSION == '' }} || ${{ env.VERSION == 'latest' }} && echo "::set-output name=target_commitish::${target_commitish}"
+          ${{ env.VERSION == '' }} || ${{ env.VERSION == 'latest' }} && echo "target_commitish=$target_commitish" >> $GITHUB_OUTPUT
       - name: Set docker image tags
         id: docker_tags
         run: |
@@ -56,7 +56,7 @@ jobs:
           tags_with_latest="$version_tags,${{ secrets.DOCKERHUB_USERNAME }}/dcompass:latest,ghcr.io/${{ github.actor }}/dcompass:latest"
           tags=$version_tags
           if [ -z "$special_version" ] || [ "$latest_version" == "$special_version" ]; then tags=$tags_with_latest; fi
-          echo "::set-output name=result::${tags}"
+          echo "result=$tags" >> $GITHUB_OUTPUT
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
