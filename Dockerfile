@@ -12,8 +12,10 @@ WORKDIR /go
 
 RUN <<EOF
     set -eux;
+
     apk add curl jq --no-cache
-    case "${TARGETPLATFORM}" in
+
+case "${TARGETPLATFORM}" in
         "linux/amd64")
             architecture="x86_64-unknown-linux-musl"
             ;;
@@ -37,14 +39,34 @@ RUN <<EOF
     asset_pattern="^dcompass-${architecture}$"
 
     if [ "$version" != "latest" ]; then
-        download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" --arg version "$version" '[.[] | select((.tag_name==$version) and (.assets | length) > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+        download_url=$(curl -L "$repo_api" \
+            | jq -r --arg asset_pattern "$asset_pattern" --arg version "$version" '
+            [.[]
+            | select((.tag_name==$version) and (.assets | length) > 0)]
+            | first
+            | .assets[]
+            | select (.name | test($asset_pattern))
+            | .browser_download_url' -)
     fi
 
     if [ "$version" = "latest" ]; then
         if [ "$prerelease" -ne 0 ]; then
-            download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" '[.[] | select(.assets | length > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+            download_url=$(curl -L "$repo_api" \
+                | jq -r --arg asset_pattern "$asset_pattern" '
+                [.[] | select(.assets | length > 0)]
+                | first
+                | .assets[]
+                | select (.name | test($asset_pattern))
+                | .browser_download_url' -)
         else
-            download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" '[.[] | select((.prerelease==false) and (.assets | length) > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+            download_url=$(curl -L "$repo_api" \
+            | jq -r --arg asset_pattern "$asset_pattern" '
+            [.[]
+            | select((.prerelease==false) and (.assets | length) > 0)]
+            | first
+            | .assets[]
+            | select (.name | test($asset_pattern))
+            | .browser_download_url' -)
         fi
     fi
 
