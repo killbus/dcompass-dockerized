@@ -4,31 +4,57 @@ ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG VERSION
 ARG DCOMPASS_TARGET_COMMITISH
-ARG GEOIP2_VERSION
 ARG PRERELEASE
 
-WORKDIR /go
-RUN apk add curl jq --no-cache
+ENV ROOTFS=/go/rootfs
 
-RUN set -eux; \
-    \
-    if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then architecture="x86_64-unknown-linux-musl"; fi; \
-    if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then architecture="aarch64-unknown-linux-musl"; fi; \
-    if [ "${TARGETPLATFORM}" = "linux/arm/v7" ]; then architecture="armv7-unknown-linux-musleabihf"; fi; \
-    \
-    REPO_API="https://api.github.com/repos/LEXUGE/dcompass/releases"; \
-    VERSION=${VERSION:-latest}; \
-    GEOIP2_VERSION=${GEOIP2_VERSION:-cn}; \
-    [ "$VERSION" != "latest" ] && VERSION="v$(echo ${VERSION##v})"; \
-    PRERELEASE=${PRERELEASE:-0}; \
-    tag_name_keyword="${architecture}-${GEOIP2_VERSION}"; \
-    \
-    if [ "$VERSION" != "latest" ]; then download_url=$(curl -L $REPO_API | jq -r --arg architecture "$architecture" --arg version "$VERSION" '.[] | select(.tag_name==$version) | .assets[] | select (.name | contains($architecture)) | .browser_download_url' -); fi; \
-    if [ "$VERSION" = "latest" ] && [ "$PRERELEASE" -ne 0 ]; then download_url=$(curl -L $REPO_API | jq -r --arg architecture "$architecture" '.[0] | .assets[] | select (.name | contains($architecture)) | .browser_download_url' -); fi; \
-    if [ "$VERSION" = "latest" ] && [ "$PRERELEASE" -eq 0 ]; then download_url=$(curl -L $REPO_API | jq -r --arg architecture "$architecture" '[.[] | select(.prerelease==false)] | first | .assets[] | select (.name | contains($architecture)) | .browser_download_url' -); fi; \
-    \
-    curl -L $download_url -o dcompass; \
-    curl -L https://github.com/LEXUGE/dcompass/raw/main/configs/example.yaml -o config.yaml;
+WORKDIR /go
+
+RUN <<EOF
+    set -eux;
+    apk add curl jq --no-cache
+    case "${TARGETPLATFORM}" in
+        "linux/amd64")
+            architecture="x86_64-unknown-linux-musl"
+            ;;
+        "linux/arm64")
+            architecture="aarch64-unknown-linux-musl"
+            ;;
+        "linux/arm/v7")
+            architecture="armv7-unknown-linux-musleabihf"
+            ;;
+        *)
+            echo "Unknown platform: ${TARGETPLATFORM}" >&2
+            exit 1
+            ;;
+    esac
+
+    repo_api="https://api.github.com/repos/LEXUGE/dcompass/releases?per_page=100"
+    version=${version:-latest}
+    [ "$version" != "latest" ] && version="v$(echo ${version##v})"
+    prerelease=${prerelease:-0}
+    # asset_pattern="^.*${architecture}"
+    asset_pattern="^dcompass-${architecture}$"
+
+    if [ "$version" != "latest" ]; then
+        download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" --arg version "$version" '.[] | select((.tag_name==$version) and (.assets | length) > 0) | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+    fi
+
+    if [ "$version" = "latest" ]; then
+        if [ "$prerelease" -ne 0 ]; then
+            download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" '[.[] | select(.assets | length > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+        else
+            download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" '[.[] | select((.prerelease==false) and (.assets | length) > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+        fi
+    fi
+
+    mkdir -p "${ROOTFS}/usr/local/bin" "${ROOTFS}/etc/dcompass"
+
+    curl -L "$download_url" -o "${ROOTFS}/usr/local/bin/dcompass";
+    curl -L https://github.com/LEXUGE/dcompass/raw/main/configs/example.yaml -o "${ROOTFS}/etc/dcompass/config.yaml"
+EOF
+
+COPY entrypoint.sh "${ROOTFS}/usr/local/bin/"
 
 FROM --platform=$TARGETPLATFORM alpine AS runtime
 ARG TARGETPLATFORM
@@ -36,9 +62,7 @@ ARG BUILDPLATFORM
 
 # RUN echo "https://mirror.tuna.tsinghua.edu.cn/alpine/v3.11/main/" > /etc/apk/repositories
 
-COPY --from=builder /go/dcompass /usr/local/bin
-COPY --from=builder /go/config.yaml /etc/dcompass/config.yaml
-COPY entrypoint.sh /usr/local/bin/
+COPY --from=builder /go/rootfs/. /
 
 RUN set -eux; \
     \
