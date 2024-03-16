@@ -37,7 +37,7 @@ RUN <<EOF
     asset_pattern="^dcompass-${architecture}$"
 
     if [ "$version" != "latest" ]; then
-        download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" --arg version "$version" '.[] | select((.tag_name==$version) and (.assets | length) > 0) | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
+        download_url=$(curl -L "$repo_api" | jq -r --arg asset_pattern "$asset_pattern" --arg version "$version" '[.[] | select((.tag_name==$version) and (.assets | length) > 0)] | first | .assets[] | select (.name | test($asset_pattern)) | .browser_download_url' -)
     fi
 
     if [ "$version" = "latest" ]; then
