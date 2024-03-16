@@ -97,5 +97,7 @@ RUN set -eux; \
 
 EXPOSE 53/udp
 
+WORKDIR /etc/dcompass
+
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["dcompass", "-c", "/etc/dcompass/config.yml"]
