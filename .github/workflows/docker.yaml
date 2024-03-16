@@ -24,13 +24,13 @@ jobs:
       - name: Get dcompass latest version
         id: latest_version
         run: |
-          version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r .[0].tag_name )
+          version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases?per_page=100 | jq -r '[.[] | select((.assets | length > 0))] | first | .tag_name')
           version=$(echo ${version##v})
           echo "result=${version}" >> $GITHUB_OUTPUT
       - name: Get dcompass latest release version
         id: latest_release_version
         run: |
-          version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases | jq -r '[.[] | select(.prerelease==false)] | first | .tag_name')
+          version=$(curl -LSs https://api.github.com/repos/LEXUGE/dcompass/releases?per_page=100 | jq -r '[.[] | select((.assets | length > 0) and (.prerelease==false))] | first | .tag_name')
           version=$(echo ${version##v})
           echo "result=${version}" >> $GITHUB_OUTPUT
       - name: Check whether the latest version is prerelease
